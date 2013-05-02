@@ -208,7 +208,7 @@ bool readgroupise(state_t* state) {
     }
     while (file_read != NULL) {
         uint8_t* data = (uint8_t*)strdup(id);
-        int len = strlen("1#8")+1;
+        int len = strlen(id)+1;
         // If the old exists delete it
         uint8_t* old = bam_aux_get(file_read, "RG");
         if (old != NULL) {
