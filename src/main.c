@@ -155,8 +155,49 @@ bool init(parsed_opts_t* opts, state_t** state_out) {
     return true;
 }
 
+char* getRGLine(const char* text) {
+    char* rg = strstr(text,"\n@RG");
+    if (rg == NULL) {
+        return NULL;
+    }
+    rg++;//skip initial \n
+    char* end = strchr(rg, '\n');
+    char* line;
+    if (end)
+    {
+        line = strndup(rg,(end-rg));
+    } else {
+        line = strdup(rg);
+    }
+    
+    return line;
+}
+char* getRGID(const char* text) {
+    char *line, *next;
+    line = getRGLine(text);
+ 
+    assert(line!=NULL);
+    
+    next = line;
+    char* token = strsep(&next, "\t");
+    token = strsep(&next,"\t"); // skip first token it should always be "@RG"
+    while (next != NULL) {
+        char* key = strsep(&token,":");
+        if (!strcmp(key,"ID")) {
+            char* retval = strdup(token);
+            free(line);
+            return retval;
+        }
+        token = strsep(&next,"\t");
+    }
+    free (line);
+}
+
 bool readgroupise(state_t* state) {
+    char* id = getRGID(state->output_header->text);
+
     if (sam_hdr_write(state->output_file, state->output_header) != 0) {
+        free(id);
         return false;
     }
     
@@ -166,9 +207,13 @@ bool readgroupise(state_t* state) {
         file_read = NULL;
     }
     while (file_read != NULL) {
-        // TODO: Add readgroup here
-        uint8_t* data = (uint8_t*)strdup("1#8");
+        uint8_t* data = (uint8_t*)strdup(id);
         int len = strlen("1#8")+1;
+        // If the old exists delete it
+        uint8_t* old = bam_aux_get(file_read, "RG");
+        if (old != NULL) {
+            bam_aux_del(file_read, old);
+        }
         bam_aux_append(file_read, "RG",'Z',len,data);
         sam_write1(state->output_file, state->output_header, file_read);
         if (sam_read1(state->input_file, state->input_header, file_read) < 0) {
@@ -176,6 +221,7 @@ bool readgroupise(state_t* state) {
             file_read = NULL;
         }
     }
+    free(id);
 
     return true;
 }
