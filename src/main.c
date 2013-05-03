@@ -215,7 +215,10 @@ bool readgroupise(state_t* state) {
             bam_aux_del(file_read, old);
         }
         bam_aux_append(file_read, "RG",'Z',len,data);
-        sam_write1(state->output_file, state->output_header, file_read);
+        if (sam_write1(state->output_file, state->output_header, file_read) < 0) {
+            dprintf(STDERR_FILENO, "Could not write read to output file.");
+            return false;
+        }
         if (sam_read1(state->input_file, state->input_header, file_read) < 0) {
             bam_destroy1(file_read);
             file_read = NULL;
@@ -232,9 +235,9 @@ void cleanup_opts(parsed_opts_t* opts) {
 }
 
 void cleanup_state(state_t* state) {
-    sam_close(state->output_file);
+    if (state->output_file) sam_close(state->output_file);
     bam_hdr_destroy(state->output_header);
-    sam_close(state->input_file);
+    if (state->input_file) sam_close(state->input_file);
     bam_hdr_destroy(state->input_header);
 }
 
@@ -242,12 +245,17 @@ int main(int argc, char** argv) {
 
     parsed_opts_t* opts = parse_args(argc, argv);
     state_t* state = NULL;
-    if (!opts || !init(opts, &state)) return -1;
+    if (!opts || !init(opts, &state)) goto error;
     
-    if (!readgroupise(state)) return -1;
+    if (!readgroupise(state)) goto error;
     
     cleanup_opts(opts);
     cleanup_state(state);
     
     return 0;
+error:
+    cleanup_opts(opts);
+    cleanup_state(state);
+
+    return -1;
 }
